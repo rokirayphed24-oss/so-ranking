@@ -793,30 +793,29 @@
             func.forEach(r => r.imis_id = normalizeId(r.imis_id));
             so.forEach(r => r.imis_id = normalizeId(r.imis_id));
 
-            const handedOver = func.filter(r => 
-                String(r.work_status).toLowerCase().trim() === 'handed-over'
-            );
+            if (bfm.length === 0) {
+            throw new Error('No schemes found in BFM file');
+             }
 
-            if (handedOver.length === 0) {
-                throw new Error('No handed-over schemes found in Functionality file');
-            }
-
-            handedOver.forEach(r => r.functional_days = toNumeric(r.functional_days));
+            func.forEach(r => r.functional_days = toNumeric(r.functional_days));
             bfm.forEach(r => r.no_of_days_bfm_reported = toNumeric(r.no_of_days_bfm_reported));
 
             const soMap = {};
             so.forEach(r => soMap[r.imis_id] = r);
             
-            const bfmMap = {};
-            bfm.forEach(r => bfmMap[r.imis_id] = r);
+            
+            const funcMap = {};
+            func.forEach(r => {
+                funcMap[r.imis_id] = r;
+               });
 
-            const merged = handedOver.map(f => ({
-                imis_id: f.imis_id,
-                functional_days: f.functional_days,
-                so_name: soMap[f.imis_id]?.so_name || 'Unknown',
-                sub_divisions: soMap[f.imis_id]?.sub_divisions || 'Unknown',
-                division: soMap[f.imis_id]?.division || 'Unknown',
-                no_of_days_bfm_reported: bfmMap[f.imis_id]?.no_of_days_bfm_reported || 0
+            const merged = bfm.map(b => ({
+              imis_id: b.imis_id,
+              no_of_days_bfm_reported: b.no_of_days_bfm_reported,
+              functional_days: funcMap[b.imis_id]?.functional_days || 0,
+              so_name: soMap[b.imis_id]?.so_name || 'Unknown',
+              sub_divisions: soMap[b.imis_id]?.sub_divisions || 'Unknown',
+              division: soMap[b.imis_id]?.division || 'Unknown'
             })).filter(r => r.so_name !== 'Unknown');
 
             if (merged.length === 0) {
