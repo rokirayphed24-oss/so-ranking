@@ -81,6 +81,57 @@
             box-shadow: var(--shadow-lg);
         }
 
+        .date-range-section {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .date-range-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-900);
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .date-range-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .date-input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .date-input-group label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--gray-600);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .date-input-group input {
+            padding: 0.625rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-family: 'Inter', -apple-system, sans-serif;
+            transition: border-color 0.2s;
+        }
+
+        .date-input-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
         .upload-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -476,6 +527,20 @@
         <div id="errorMsg" class="error" style="display: none;"></div>
 
         <div class="upload-section">
+            <div class="date-range-section">
+                <label class="date-range-label">📅 Data Date Range (Optional)</label>
+                <div class="date-range-inputs">
+                    <div class="date-input-group">
+                        <label for="startDate">From Date</label>
+                        <input type="date" id="startDate" placeholder="Start Date">
+                    </div>
+                    <div class="date-input-group">
+                        <label for="endDate">To Date</label>
+                        <input type="date" id="endDate" placeholder="End Date">
+                    </div>
+                </div>
+            </div>
+            
             <div class="upload-grid">
                 <div class="upload-card" id="bfmCard" onclick="document.getElementById('bfmFile').click()">
                     <div class="upload-icon">📊</div>
@@ -661,6 +726,7 @@
     <script>
         let files = { bfm: null, func: null, so: null };
         let processedData = null;
+        let dateRange = { start: null, end: null };
         let currentPages = { so: 0, sub: 0, div: 0 };
         const ROWS_PER_PAGE = 10;
 
@@ -681,6 +747,15 @@
         function checkReady() {
             document.getElementById('generateBtn').disabled = !(files.bfm && files.func && files.so);
         }
+
+        // Date range event listeners
+        document.getElementById('startDate').addEventListener('change', (e) => {
+            dateRange.start = e.target.value || null;
+        });
+
+        document.getElementById('endDate').addEventListener('change', (e) => {
+            dateRange.end = e.target.value || null;
+        });
 
         document.getElementById('generateBtn').addEventListener('click', processFiles);
 
@@ -749,7 +824,7 @@
             }
 
             const headers = rawData[headerRow].map(h => 
-                String(h).replace(/\ufeff/g, '').trim().toLowerCase()
+                String(h).replace(/\ufeff/g, '').trim().toLowerCase().replace(/-/g, '_')
             );
             
             const dataRows = rawData.slice(headerRow + 1);
@@ -786,6 +861,12 @@
         function toNumeric(val) {
             const num = parseFloat(val);
             return isNaN(num) ? 0 : num;
+        }
+
+        function normalizeValue(value) {
+            // Normalize value: lowercase, replace hyphens with underscores
+            // Handles variations like "handed-over" vs "handed_over" vs "Handed-Over"
+            return String(value).toLowerCase().trim().replace(/-/g, '_');
         }
 
         function calculateRankings(bfm, func, so) {
@@ -1065,7 +1146,13 @@
             
             doc.setFontSize(10);
             doc.setFont(undefined, 'normal');
-            doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 22);
+            let headerText = `Generated: ${new Date().toLocaleDateString()}`;
+            if (dateRange.start || dateRange.end) {
+                const startStr = dateRange.start ? new Date(dateRange.start).toLocaleDateString() : 'N/A';
+                const endStr = dateRange.end ? new Date(dateRange.end).toLocaleDateString() : 'N/A';
+                headerText += ` | Data Range: ${startStr} to ${endStr}`;
+            }
+            doc.text(headerText, 14, 22);
             
             const columns = type === 'so' ? 
                 ['Rank', 'SO Name', 'Subdivision', 'Division', 'Handed Over Schemes', 'BFM %', 'Func %', 'Perf %', 'Weighted', 'Grade'] :
@@ -1160,6 +1247,19 @@
             
             const data = processedData[type];
             
+            // Prepare metadata rows
+            const metadataRows = [
+                ['Generated Date:', new Date().toLocaleDateString()],
+            ];
+            
+            if (dateRange.start || dateRange.end) {
+                const startStr = dateRange.start ? new Date(dateRange.start).toLocaleDateString() : 'N/A';
+                const endStr = dateRange.end ? new Date(dateRange.end).toLocaleDateString() : 'N/A';
+                metadataRows.push(['Data Date Range:', `${startStr} to ${endStr}`]);
+            }
+            
+            metadataRows.push([]); // Empty row for spacing
+            
             // Prepare headers
             const headers = type === 'so' ? 
                 ['Rank', 'SO Name', 'Subdivision', 'Division', 'Handed Over Schemes', 'BFM %', 'Func %', 'Perf %', 'Weighted Score', 'Grade'] :
@@ -1178,8 +1278,8 @@
                 }
             });
             
-            // Combine headers and rows
-            const wsData = [headers, ...rows];
+            // Combine metadata, headers and rows
+            const wsData = [...metadataRows, headers, ...rows];
             
             // Create worksheet
             const ws = XLSX.utils.aoa_to_sheet(wsData);
